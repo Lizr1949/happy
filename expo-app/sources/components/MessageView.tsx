@@ -11,6 +11,7 @@ import { AgentEvent } from "@/sync/typesRaw";
 import { sync } from '@/sync/sync';
 import { Option } from './markdown/MarkdownView';
 import { useSetting } from "@/sync/storage";
+import { shouldShowThinkingMessage } from "./messageViewVisibility";
 
 export const MessageView = (props: {
   message: Message;
@@ -94,8 +95,7 @@ function AgentTextBlock(props: {
     sync.sendMessage(props.sessionId, option.title);
   }, [props.sessionId]);
 
-  // Hide thinking messages unless experiments is enabled
-  if (props.message.isThinking && !experiments) {
+  if (!shouldShowThinkingMessage(props.message.isThinking, experiments)) {
     return null;
   }
 
