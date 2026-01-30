@@ -49,3 +49,9 @@ CLAUDE.local.md
 
 # Development planning notes (keep local, don't commit)
 notes/
+
+# Local agent/runtime artifacts
+.sdd/
+.serena/
+context/
+logs/
