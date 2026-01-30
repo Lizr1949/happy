@@ -20,6 +20,10 @@ export type { ReasoningToolCall, ReasoningToolResult, ReasoningMessage, Reasonin
  * Gemini-specific reasoning processor.
  */
 export class GeminiReasoningProcessor extends BaseReasoningProcessor {
+    constructor(onMessage?: (message: any) => void, options?: { flushIntervalMs?: number }) {
+        super(onMessage, options);
+    }
+
     protected getToolName(): string {
         return 'GeminiReasoning';
     }

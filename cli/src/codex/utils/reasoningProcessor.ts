@@ -20,6 +20,10 @@ export type { ReasoningToolCall, ReasoningToolResult, ReasoningMessage, Reasonin
  * Codex-specific reasoning processor.
  */
 export class ReasoningProcessor extends BaseReasoningProcessor {
+    constructor(onMessage?: (message: any) => void, options?: { flushIntervalMs?: number }) {
+        super(onMessage, options);
+    }
+
     protected getToolName(): string {
         return 'CodexReasoning';
     }

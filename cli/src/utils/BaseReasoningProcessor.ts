@@ -66,6 +66,9 @@ export abstract class BaseReasoningProcessor {
     protected toolCallStarted: boolean = false;
     protected currentTitle: string | null = null;
     protected onMessage: ((message: any) => void) | null = null;
+    protected flushIntervalMs: number;
+    protected lastFlushAtMs: number = 0;
+    protected lastSentLength: number = 0;
 
     /**
      * Returns the tool name for this processor.
@@ -77,8 +80,9 @@ export abstract class BaseReasoningProcessor {
      */
     protected abstract getLogPrefix(): string;
 
-    constructor(onMessage?: (message: any) => void) {
+    constructor(onMessage?: (message: any) => void, options?: { flushIntervalMs?: number }) {
         this.onMessage = onMessage || null;
+        this.flushIntervalMs = options?.flushIntervalMs ?? 300;
         this.reset();
     }
 
@@ -152,6 +156,9 @@ export abstract class BaseReasoningProcessor {
             // Untitled reasoning, just accumulate
             this.contentBuffer = this.accumulator;
         }
+
+        // Stream untitled reasoning deltas with throttling
+        this.flushUntitledDeltaIfNeeded();
     }
 
     /**
@@ -224,14 +231,17 @@ export abstract class BaseReasoningProcessor {
             logger.debug(`${this.getLogPrefix()} Sending tool call result`);
             this.onMessage?.(toolResult);
         } else if (content.trim()) {
-            // Send regular reasoning message for untitled reasoning (only if there's content)
-            const reasoningMessage: ReasoningMessage = {
-                type: 'reasoning',
-                message: content,
-                id: randomUUID()
-            };
-            logger.debug(`${this.getLogPrefix()} Sending reasoning message`);
-            this.onMessage?.(reasoningMessage);
+            // Send remaining untitled reasoning delta (avoid duplicates)
+            const remaining = content.substring(this.lastSentLength);
+            if (remaining.trim()) {
+                const reasoningMessage: ReasoningMessage = {
+                    type: 'reasoning',
+                    message: remaining,
+                    id: randomUUID()
+                };
+                logger.debug(`${this.getLogPrefix()} Sending reasoning message`);
+                this.onMessage?.(reasoningMessage);
+            }
         }
 
         // Reset state after completion
@@ -288,6 +298,8 @@ export abstract class BaseReasoningProcessor {
         this.currentCallId = null;
         this.toolCallStarted = false;
         this.currentTitle = null;
+        this.lastFlushAtMs = 0;
+        this.lastSentLength = 0;
     }
 
     /**
@@ -302,5 +314,42 @@ export abstract class BaseReasoningProcessor {
      */
     hasStartedToolCall(): boolean {
         return this.toolCallStarted;
+    }
+
+    /**
+     * Flush partial untitled reasoning deltas with throttling.
+     */
+    private flushUntitledDeltaIfNeeded(): void {
+        if (!this.onMessage) {
+            return;
+        }
+        if (this.inTitleCapture || this.hasTitle) {
+            return;
+        }
+        if (!this.contentBuffer) {
+            return;
+        }
+
+        const now = Date.now();
+        const shouldFlush = this.lastSentLength === 0 || (now - this.lastFlushAtMs) >= this.flushIntervalMs;
+        if (!shouldFlush) {
+            return;
+        }
+
+        const delta = this.contentBuffer.substring(this.lastSentLength);
+        if (!delta.trim()) {
+            return;
+        }
+
+        const reasoningMessage: ReasoningMessage = {
+            type: 'reasoning',
+            message: delta,
+            id: randomUUID()
+        };
+
+        logger.debug(`${this.getLogPrefix()} Streaming reasoning delta (${delta.length} chars)`);
+        this.onMessage?.(reasoningMessage);
+        this.lastFlushAtMs = now;
+        this.lastSentLength = this.contentBuffer.length;
     }
 }
